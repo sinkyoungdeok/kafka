@@ -103,6 +103,78 @@
 # 3. 브로커, 복제, ISR(In-Sync-Replication)
 <details><summary> 자세히보기 </summary>
 
+### Kafka broker
+- 카프카가 설치되어 있는 서버 단위
+- 보통 3개이상의 broker로 구성하여 사용하는 것을 권장
+
+![image](https://user-images.githubusercontent.com/28394879/144804154-d1d4235f-d9f8-4534-9a33-36a5faf63352.png)
+
+### Kafka replication
+- replication은 partition의 복제를 뜻한다.
+
+![image](https://user-images.githubusercontent.com/28394879/144804478-8411359a-3492-4929-b69c-57221dd2a0a5.png)
+- 만약 파티션이이 1개이고 replication이 1인 topic이 존재하고 브로커가 3대라면, 브로커 3대중 1대에 해당 토픽의 정보(데이터)가 저장된다 
+
+
+![image](https://user-images.githubusercontent.com/28394879/144804664-4cded1c6-90d6-4ed0-bb51-2f6055d4d6eb.png)
+- 만약 파티션이 1개이고 replication이 2인 topic이 존재하고 브로커가 3대라면, 파티션은 원본1개와 복제본 1개로 총2개가 존재한다. 
+
+![image](https://user-images.githubusercontent.com/28394879/144807916-6a839712-5356-45ce-9977-e6ab7d2db273.png)
+- 파티션이 1개이고, replication이 3인 topic이 존재하고 브로커가 3대라면, 파티션은 원본1개와 복제본 2개로 총3개가 존재한다. 
+
+브로커개수가 3이면 replication은 4가 될 수 없다. 
+
+![image](https://user-images.githubusercontent.com/28394879/144808241-08c604ae-e582-488d-8f5b-48611faf84ca.png)
+- 원본 파티션은 Leader partition이라고 부른다. 
+- 나머지 파티션은 Follower partition이라고 부른다. 
+
+### Kafka ISR
+
+![image](https://user-images.githubusercontent.com/28394879/144808313-6d0601c0-aecb-4fd9-bd23-8d5cf09dde99.png)
+- Leader partition + Follower partition 을 ISR이라고한다.
+- ISR은 In Sync Replica의 줄임말이다. 
+
+
+### Why replica? (왜 복제를하나?)
+- partition의 고가용성을 위해서 사용한다. 
+- replication이 1이고 partition 1인 topic이 존재 한다면, 갑자기 브로커가 고장나면 더이상 해당 파티션을 복구할 수 없게된다.
+- 만약 replication이 2이면, Follower Partition을 통해서 복구가 가능해지고, Follower Partition이 Leader Partition으로 승계하게 된다.
+  
+### Replication&ack
+- 프로듀서가 토픽의 파티션에 데이터를 전달할 때, 전달 받는 주체가 Leader Partition이다.
+- 프로듀서에는 ack라는 상세 옵션이 있다
+  - ack를 통해 고가용성을 유지할 수 있다
+  - 이 옵션은 partition의 replication과 관련이 있다.
+- ack는 0, 1, all 중에 1개를 골라서 설정할 수 있다.
+
+**ack가 0인경우**  
+![image](https://user-images.githubusercontent.com/28394879/144809372-6066a815-730c-4306-b229-4612bafa4dda.png)
+- 프로듀서가 Leader Partition에 데이터를 전송하고, 응답값을 받지않는다.
+- Leader Partition에 데이터가 정상적으로 전송됐는지 그리고 나머지 partition에 정상적으로 복제되었는지 알 수 없고, 보장할 수 없다.
+- 속도는 빠르지만 데이터 유실 가능성이 있다.
+
+
+**ack가 1인경우**  
+![image](https://user-images.githubusercontent.com/28394879/144809692-b768e6bf-b8e6-43bf-b0b1-ad77c37b5b7a.png)
+- Leader Partition에 데이터를 전송하고, Leader Partition이 데이터를 정상적으로 받았는지 응답값을 받는다.
+- 나머지 Partition에 복제되었는지는 알 수 없다.
+- Leader Partition이 데이터를 받은 즉시 브로커가 장애가 난다면 나머지 Partition에 데이터가 미처 전송되지 못한 상태이므로 이전에 ack 0옵션과 마찬가지로 데이터 유실 가능성이 있다
+
+**ack all인경우**  
+![image](https://user-images.githubusercontent.com/28394879/144810819-049d6a73-42de-4394-811b-6ee6848494fe.png)
+- follower partition에 복제가 잘 이루어졌는지 응답값을 전달받는다.
+- Leader Partition에 데이터를 보낸후, Follower Partition에도 데이터가 저장되는 것을 확인하는 절차를 거친다.
+- 이 경우 데이터 유실은 없다.
+- ack 0, 1 에 비해 확인하는 부분이 많기 때문에 속도가 현저히 느리다는 단점이 있다 
+
+### Replication count
+![image](https://user-images.githubusercontent.com/28394879/144811637-7bd0c275-017b-4153-9443-de4d182d8c44.png)
+- replication 갯수가 많을수록 브로커의 리소스 사용량도 늘어난다.
+- 따라서 카프카에 들어오는 데이터량과 retention data즉 저장시간을 잘 생각해서 replication의 개수를 정해야한다.
+
+![image](https://user-images.githubusercontent.com/28394879/144811717-9242e16f-109d-4915-83b2-502154e2c229.png)
+- 3개 이상의 브로커를 사용 할 때 replication은 3으로 설정하는 것이 좋다.
+
 </details>
 
 # 4. 파티셔너(Partitioner)란?
